@@ -3,6 +3,7 @@ import requests
 import json
 import re
 from datetime import datetime
+import xml.etree.ElementTree as ET
 
 # 1. Page Configuration
 st.set_page_config(page_title="MedRep Clinical Portal", page_icon="💊", layout="wide")
@@ -31,6 +32,37 @@ st.markdown(f"""
         transition: background 1s ease-in-out;
     }}
     
+    .brand-header {{
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 16px;
+        padding: 16px 24px;
+        margin-bottom: 20px;
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+    }}
+    
+    .brand-title {{
+        font-size: 2.2rem;
+        font-weight: 900;
+        letter-spacing: 2px;
+        background: linear-gradient(90deg, #58a6ff, #79c0ff, #d2a8ff);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin: 0;
+        text-transform: uppercase;
+        text-align: center;
+    }}
+
+    .brand-subtitle {{
+        color: #8b949e;
+        font-size: 0.9rem;
+        margin-top: 4px;
+        letter-spacing: 1px;
+        text-align: center;
+    }}
+
     .gloss-panel {{
         background: linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
         backdrop-filter: blur(16px);
@@ -79,6 +111,18 @@ st.markdown(f"""
         border: 1px solid rgba(242, 204, 96, 0.3);
     }}
 
+    .badge-disease {{
+        background: linear-gradient(90deg, #137333, #0a3d1b);
+        color: #81c995;
+        padding: 4px 10px;
+        border-radius: 16px;
+        font-weight: bold;
+        font-size: 0.8rem;
+        display: inline-block;
+        margin-bottom: 6px;
+        border: 1px solid rgba(129, 201, 149, 0.3);
+    }}
+
     .bottom-line {{
         border: 0;
         height: 2px;
@@ -88,6 +132,50 @@ st.markdown(f"""
     }}
 </style>
 """, unsafe_allow_html=True)
+
+# Smart Dosage-Form Visual Image Database
+FORM_IMAGES = {
+    "injection": "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&w=600&q=80",
+    "tablet": "https://images.unsplash.com/photo-1584017911766-d451b3d0e843?auto=format&fit=crop&w=600&q=80",
+    "capsule": "https://images.unsplash.com/photo-1550572017-edd951aa8f72?auto=format&fit=crop&w=600&q=80",
+    "syrup": "https://images.unsplash.com/photo-1587854692152-cbe660dbde88?auto=format&fit=crop&w=600&q=80",
+    "cream": "https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=600&q=80",
+    "inhaler": "https://images.unsplash.com/photo-1631549916768-4119b2e5f926?auto=format&fit=crop&w=600&q=80",
+    "drops": "https://images.unsplash.com/photo-1607613009820-a29f7bb81c04?auto=format&fit=crop&w=600&q=80",
+    "default": "https://images.unsplash.com/photo-1471864190281-a93a3070b6de?auto=format&fit=crop&w=600&q=80"
+}
+
+# Clinical Disease Management Knowledgebase
+DISEASE_MANAGEMENT_DB = {
+    "Pediatric Uncomplicated Malaria": {
+        "category": "Infectious Diseases / Parasitology",
+        "first_line": "Artemether + Lumefantrine (AL) fixed-dose combination or Artesunate + Amodiaquine (ASAQ).",
+        "mechanism": "Artemether rapidly clears parasitemia; Lumefantrine eliminates residual blood-stage Plasmodium falciparum parasites.",
+        "non_pharm": "Ensure bed net (ITN) coverage, fever management via cooling tepid sponges, and maintaining adequate oral fluid hydration.",
+        "monitoring": "Monitor thick/thin blood smears at 48-72h, baseline hemoglobin/hematocrit, and re-assess if persistent high fever exceeds 48 hours."
+    },
+    "Essential Hypertension": {
+        "category": "Cardiovascular Systems",
+        "first_line": "Thiazide-like diuretic (e.g., Hydrochlorothiazide), ACE Inhibitor (e.g., Lisinopril), or CCB (e.g., Amlodipine).",
+        "mechanism": "Reduces peripheral vascular resistance and intravascular blood volume to lower systemic arterial blood pressure.",
+        "non_pharm": "Dietary Sodium restriction (<2g/day), regular aerobic physical exercise, weight optimization, and alcohol restriction.",
+        "monitoring": "Office and ambulatory Blood Pressure monitoring, baseline serum creatinine, eGFR, and electrolytes (sodium and potassium)."
+    },
+    "Type 2 Diabetes Mellitus": {
+        "category": "Endocrine & Metabolic Disorders",
+        "first_line": "Metformin Hydrochloride (Biguanide) + Lifestyle Interventions; add SGLT2i or GLP-1 RA if cardiorenal risks exist.",
+        "mechanism": "Decreases hepatic gluconeogenesis, reduces intestinal glucose absorption, and enhances insulin sensitivity.",
+        "non_pharm": "Medical Nutrition Therapy (low glycemic index diet), 150 mins/week moderate exercise, and weight management.",
+        "monitoring": "HbA1c every 3 months (target < 7.0%), annual urine albumin-to-creatinine ratio, annual dilated eye exam, and foot exam."
+    },
+    "Community-Acquired Pneumonia": {
+        "category": "Respiratory Medicine",
+        "first_line": "Amoxicillin high-dose or Macrolide (Azithromycin) for outpatients; Ceftriaxone + Macrolide for inpatients.",
+        "mechanism": "Inhibits bacterial cell wall peptidoglycan synthesis (beta-lactams) or bacterial protein translation (macrolides).",
+        "non_pharm": "Adequate rest, supplemental oxygen therapy if SpO2 < 92%, chest physiotherapy, and fluid resuscitation.",
+        "monitoring": "Respiratory rate, pulse oximetry, chest radiograph follow-up at 4-6 weeks, and clinical response within 48-72 hours."
+    }
+}
 
 # Formatting Engine for Short vs Extended Views
 def format_clinical_bullets(text, max_bullets=3, extended_mode=False):
@@ -129,43 +217,81 @@ DRUG_SYNONYMS = {
     "cefalexin": "cephalexin"
 }
 
-NEWS_ITEMS = [
-    {
-        "title": "FDA Approves Pasatru for Rare Bone Disorder Treatment",
-        "tag": "FDA APPROVAL",
-        "time": "12m ago",
-        "img": "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&w=600&q=80",
-        "link": "https://www.fda.gov/drugs/news-events-human-drugs/notable-approvals-drugs",
-        "summary": "First-in-class monoclonal antibody approved to reduce heterotopic ossification in pediatric and adult patients."
-    },
-    {
-        "title": "Public Health Alert: Contaminated Botanical Supplements",
-        "tag": "SAFETY ALERT",
-        "time": "1h ago",
-        "img": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80",
-        "link": "https://www.fda.gov/food/alerts-advisories-safety-information",
-        "summary": "Consumers warned against purchasing unauthorized herbal weight loss formulas found adulterated with toxins."
-    },
-    {
-        "title": "Nationwide Voluntary Recall on Sterile Injectables",
-        "tag": "RECALL",
-        "time": "3h ago",
-        "img": "https://images.unsplash.com/photo-1585435557343-3b092031a831?auto=format&fit=crop&w=600&q=80",
-        "link": "https://www.fda.gov/drugs/drug-safety-and-availability/drug-recalls",
-        "summary": "Multi-dose vials recalled nationwide following routine laboratory testing detecting elevated endotoxin levels."
-    },
-    {
-        "title": "Novel Pediatric Malaria Prevention Guidelines Released",
-        "tag": "CLINICAL STUDY",
-        "time": "5h ago",
-        "img": "https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?auto=format&fit=crop&w=600&q=80",
-        "link": "https://www.who.int/news",
-        "summary": "Updated therapeutic dosing strategies published to reduce transmission rates in endemic regional clinics."
-    }
-]
+# Real-Time Live News Engine Fetcher
+@st.cache_data(ttl=1800)
+def fetch_live_medical_news():
+    fallback_news = [
+        {
+            "title": "FDA Approves Pasatru for Rare Bone Disorder Treatment",
+            "tag": "FDA APPROVAL",
+            "time": "Recent",
+            "img": "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&w=600&q=80",
+            "link": "https://www.fda.gov/drugs/news-events-human-drugs/notable-approvals-drugs",
+            "summary": "First-in-class monoclonal antibody approved to reduce heterotopic ossification in pediatric and adult patients."
+        },
+        {
+            "title": "Public Health Alert: Contaminated Botanical Supplements",
+            "tag": "SAFETY ALERT",
+            "time": "Recent",
+            "img": "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80",
+            "link": "https://www.fda.gov/food/alerts-advisories-safety-information",
+            "summary": "Consumers warned against purchasing unauthorized herbal weight loss formulas found adulterated with toxins."
+        },
+        {
+            "title": "Nationwide Voluntary Recall on Sterile Injectables",
+            "tag": "RECALL",
+            "time": "Recent",
+            "img": "https://images.unsplash.com/photo-1585435557343-3b092031a831?auto=format&fit=crop&w=600&q=80",
+            "link": "https://www.fda.gov/drugs/drug-safety-and-availability/drug-recalls",
+            "summary": "Multi-dose vials recalled nationwide following routine laboratory testing detecting elevated endotoxin levels."
+        }
+    ]
+    
+    try:
+        url = "https://www.fda.gov/about-fda/contact-fda/stay-informed/rss-feeds/press-releases/rss.xml"
+        res = requests.get(url, timeout=4)
+        if res.status_code == 200:
+            root = ET.fromstring(res.content)
+            live_items = []
+            for item in root.findall('.//item')[:5]:
+                title = item.find('title').text if item.find('title') is not None else "Medical Regulatory Update"
+                link = item.find('link').text if item.find('link') is not None else "https://www.fda.gov/news-events"
+                desc = item.find('description').text if item.find('description') is not None else "Latest clinical regulatory guidance."
+                clean_desc = re.sub('<[^<]+?>', '', desc)[:120] + "..."
+                
+                live_items.append({
+                    "title": title,
+                    "tag": "LIVE REGULATORY",
+                    "time": "Real-time",
+                    "img": "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?auto=format&fit=crop&w=600&q=80",
+                    "link": link,
+                    "summary": clean_desc
+                })
+            if live_items:
+                return live_items
+    except Exception:
+        pass
+    return fallback_news
 
-def fetch_drug_image(drug_name):
-    query_term = DRUG_SYNONYMS.get(drug_name.lower(), drug_name)
+def fetch_drug_image_by_form(drug_name, dosage_text=""):
+    query_term = DRUG_SYNONYMS.get(drug_name.lower(), drug_name).lower()
+    combined_text = f"{query_term} {dosage_text}".lower()
+    
+    if any(k in combined_text for k in ["inject", "vial", "iv", "im", "infusion", "ampoule", "artemether"]):
+        return FORM_IMAGES["injection"]
+    elif any(k in combined_text for k in ["tablet", "tab", "oral solid", "paracetamol", "aspirin", "metformin"]):
+        return FORM_IMAGES["tablet"]
+    elif any(k in combined_text for k in ["capsule", "cap", "amoxicillin", "doxycycline"]):
+        return FORM_IMAGES["capsule"]
+    elif any(k in combined_text for k in ["syrup", "suspension", "liquid", "solution", "caffeine citrate"]):
+        return FORM_IMAGES["syrup"]
+    elif any(k in combined_text for k in ["cream", "ointment", "gel", "topical"]):
+        return FORM_IMAGES["cream"]
+    elif any(k in combined_text for k in ["inhaler", "aerosol", "salbutamol", "albuterol"]):
+        return FORM_IMAGES["inhaler"]
+    elif any(k in combined_text for k in ["drops", "ophthalmic", "otic"]):
+        return FORM_IMAGES["drops"]
+    
     try:
         url = f"https://rximage.nlm.nih.gov/api/rximage/1/rxnav?name={query_term}&resolution=600"
         res = requests.get(url, timeout=3)
@@ -175,22 +301,20 @@ def fetch_drug_image(drug_name):
                 return images[0].get('imageUrl')
     except Exception:
         pass
-    return "https://images.unsplash.com/photo-1471864190281-a93a3070b6de?auto=format&fit=crop&w=600&q=80"
+        
+    return FORM_IMAGES["default"]
 
 def fetch_drug_data_with_fallback(drug_query):
     clean_query = drug_query.lower().strip()
     search_term = DRUG_SYNONYMS.get(clean_query, clean_query)
     
-    # 1. Strict Exact Match First (Prevents Amoxicillin matching Amoxiclav)
     url_exact = f'https://api.fda.gov/drug/label.json?search=openfda.generic_name.exact:"{search_term.upper()}"&limit=1'
     res = requests.get(url_exact)
     
-    # 2. Quoted Exact Match Secondary
     if res.status_code != 200:
         url_quoted = f'https://api.fda.gov/drug/label.json?search=openfda.generic_name:"{search_term}"&limit=1'
         res = requests.get(url_quoted)
 
-    # 3. Fallback Fuzzy Search
     if res.status_code != 200:
         url_fuzzy = f'https://api.fda.gov/drug/label.json?search=openfda.generic_name:{search_term}&limit=1'
         res = requests.get(url_fuzzy)
@@ -205,7 +329,6 @@ def fetch_drug_data_with_fallback(drug_query):
             "adverse": data.get('adverse_reactions', ['No data available.'])[0]
         }
     
-    # 4. NIH DailyMed Fallback Strategy
     try:
         rx_url = f"https://rxnav.nlm.nih.gov/REST/rxcui.json?name={search_term}"
         rx_res = requests.get(rx_url, timeout=3)
@@ -228,11 +351,13 @@ def render_monograph_card(drug_query, extended_mode=False):
     c_left, c_right = st.columns([1, 2], gap="large")
     drug_info = fetch_drug_data_with_fallback(drug_query)
 
+    dosage_text = drug_info["dosage"] if drug_info else ""
+    img_url = fetch_drug_image_by_form(drug_query, dosage_text)
+
     with c_left:
         st.markdown('<div class="gloss-panel">', unsafe_allow_html=True)
-        img_url = fetch_drug_image(drug_query)
         if img_url:
-            st.image(img_url, caption=f"Pill Visual: {drug_query.title()}", use_container_width=True)
+            st.image(img_url, caption=f"Formulation Visual: {drug_query.title()}", use_container_width=True)
             
         if drug_info:
             source_name = drug_info["source"]
@@ -268,16 +393,60 @@ def render_monograph_card(drug_query, extended_mode=False):
             st.warning(f"No clinical record found for '{drug_query}'. Verify ingredient spelling.")
         st.markdown('</div>', unsafe_allow_html=True)
 
-# Callback functions to safely update selectbox state before rerun
+# State Callbacks
 def set_search_term(term):
     st.session_state.search_query = term
+
+@st.dialog("⚙️ Portal Settings & Configurations")
+def open_settings_modal():
+    st.write("Configure query behavior and system dependencies below:")
+    st.radio("Query Engine Filter:", ["Generic Active Ingredient", "Exact Match Only"], key="modal_filter")
+    st.markdown("---")
+    st.markdown("#### 📦 Deployment Dependencies")
+    requirements_data = "streamlit\nrequests\n"
+    st.download_button(
+        label="💾 Download requirements.txt",
+        data=requirements_data,
+        file_name="requirements.txt",
+        mime="text/plain",
+        use_container_width=True
+    )
 
 # Application State Initialization
 if 'search_query' not in st.session_state:
     st.session_state.search_query = ""
 
-# --- TOP SEARCH HEADER ---
-st.markdown("## 💊 MEDREP CLINICAL PORTAL")
+# --- TOP HEADER WITH BACK & SETTINGS BUTTONS ---
+st.markdown('<div class="brand-header">', unsafe_allow_html=True)
+h_col1, h_col2, h_col3 = st.columns([1, 4, 1], vertical_alignment="center")
+
+with h_col1:
+    if st.session_state.search_query:
+        st.button("⬅️ Back to Home", use_container_width=True, on_click=set_search_term, args=("",))
+
+with h_col2:
+    st.markdown('<div class="brand-title">💊 MEDREP</div>', unsafe_allow_html=True)
+    st.markdown('<div class="brand-subtitle">CLINICAL PHARMACOLOGY & THERAPEUTIC INTELLIGENCE PORTAL</div>', unsafe_allow_html=True)
+
+with h_col3:
+    if st.button("⚙️ Settings", use_container_width=True):
+        open_settings_modal()
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+# --- 1. QUICK CATEGORY PRESET FILTERS ---
+st.caption("⚡ Quick Therapeutic Category Presets:")
+btn_col1, btn_col2, btn_col3, btn_col4, btn_col5 = st.columns(5)
+
+btn_col1.button("🧫 Antibiotic", use_container_width=True, on_click=set_search_term, args=("Amoxicillin",))
+btn_col2.button("💊 Analgesic", use_container_width=True, on_click=set_search_term, args=("Ibuprofen",))
+btn_col3.button("🫀 Antihypertensive", use_container_width=True, on_click=set_search_term, args=("Atenolol",))
+btn_col4.button("🩸 Antidiabetic", use_container_width=True, on_click=set_search_term, args=("Metformin",))
+btn_col5.button("🫁 Bronchodilator", use_container_width=True, on_click=set_search_term, args=("Salbutamol",))
+
+st.write("") # Gentle spacing
+
+# --- 2. SEARCH BAR & CLEAR BUTTON ---
 search_col1, search_col2 = st.columns([3, 1])
 
 with search_col1:
@@ -291,205 +460,207 @@ with search_col1:
 with search_col2:
     st.button("🔴 Clear Search / Home", use_container_width=True, on_click=set_search_term, args=("",))
 
-# --- QUICK CATEGORY PRESET FILTERS ---
-st.caption("⚡ Quick Therapeutic Category Presets:")
-btn_col1, btn_col2, btn_col3, btn_col4, btn_col5 = st.columns(5)
-
-btn_col1.button("🧫 Antibiotic", use_container_width=True, on_click=set_search_term, args=("Amoxicillin",))
-btn_col2.button("💊 Analgesic", use_container_width=True, on_click=set_search_term, args=("Ibuprofen",))
-btn_col3.button("🫀 Antihypertensive", use_container_width=True, on_click=set_search_term, args=("Atenolol",))
-btn_col4.button("🩸 Antidiabetic", use_container_width=True, on_click=set_search_term, args=("Metformin",))
-btn_col5.button("🫁 Bronchodilator", use_container_width=True, on_click=set_search_term, args=("Salbutamol",))
-
 # Routing Logic
 if st.session_state.search_query:
     st.info(f"📍 Active Focus Monograph: **{st.session_state.search_query.title()}**")
     
-    # Toggle Controls for Shortened vs Extended View
     extended_mode_toggle = st.checkbox("🔍 Enable Full/Extended Text Monograph Depth", value=False)
     
     render_monograph_card(st.session_state.search_query.lower(), extended_mode=extended_mode_toggle)
 else:
-    # --- HOMEPAGE LAYOUT ---
-    col_left, col_middle, col_right = st.columns([1, 1.3, 1], gap="medium")
+    # Navigation Tabs on Homepage
+    tab_home, tab_diseases = st.tabs(["🏠 Portal Home & Real-Time News", "🩺 Clinical Diseases & Management Protocol"])
 
-    with col_left:
-        st.markdown('<div class="gloss-panel">', unsafe_allow_html=True)
-        st.markdown("### 🖼️ PICTURE")
-        st.image("https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?auto=format&fit=crop&w=600&q=80", 
-                 caption="Pharmaceutical Research & Synthesis", use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+    with tab_home:
+        col_left, col_right = st.columns([1, 1.3], gap="medium")
 
-    with col_middle:
-        st.markdown("### 📰 NEWS")
-        
-        news_json = json.dumps(NEWS_ITEMS)
-        carousel_html = f"""
-        <!DOCTYPE html>
-        <html>
-        <head>
-        <style>
-            * {{ box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }}
-            body {{ background: transparent; color: white; overflow: hidden; }}
-            .carousel-container {{
-                position: relative;
-                width: 100%;
-                background: linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
-                backdrop-filter: blur(16px);
-                border: 1px solid rgba(255, 255, 255, 0.12);
-                border-radius: 16px;
-                padding: 14px;
-                overflow: hidden;
-            }}
-            .slider {{
-                display: flex;
-                transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1);
-                width: 100%;
-            }}
-            .slide {{
-                min-width: 100%;
-                display: flex;
-                flex-direction: column;
-                gap: 8px;
-            }}
-            .slide img {{
-                width: 100%;
-                height: 180px;
-                object-fit: cover;
-                border-radius: 10px;
-            }}
-            .tag {{
-                background: #1f6feb;
-                color: white;
-                font-size: 0.7rem;
-                font-weight: bold;
-                padding: 2px 8px;
-                border-radius: 4px;
-                display: inline-block;
-                width: fit-content;
-            }}
-            .title {{
-                font-size: 1rem;
-                font-weight: bold;
-                color: #ffffff;
-                line-height: 1.25;
-            }}
-            .summary {{
-                font-size: 0.82rem;
-                color: #c9d1d9;
-                display: -webkit-box;
-                -webkit-line-clamp: 2;
-                -webkit-box-orient: vertical;
-                overflow: hidden;
-            }}
-            .link {{
-                color: #58a6ff;
-                font-size: 0.8rem;
-                text-decoration: none;
-                font-weight: 500;
-            }}
-            .dots-container {{
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                gap: 8px;
-                margin-top: 12px;
-            }}
-            .dot {{
-                width: 8px;
-                height: 8px;
-                background-color: rgba(255, 255, 255, 0.3);
-                border-radius: 50%;
-                cursor: pointer;
-                transition: all 0.3s ease;
-            }}
-            .dot.active {{
-                background-color: #58a6ff;
-                width: 20px;
-                border-radius: 4px;
-            }}
-        </style>
-        </head>
-        <body>
+        with col_left:
+            st.markdown('<div class="gloss-panel">', unsafe_allow_html=True)
+            st.markdown("### 🖼️ PICTURE")
+            st.image("https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?auto=format&fit=crop&w=600&q=80", 
+                     caption="Pharmaceutical Research & Synthesis", use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
 
-        <div class="carousel-container">
-            <div class="slider" id="slider"></div>
-            <div class="dots-container" id="dots"></div>
-        </div>
+        with col_right:
+            st.markdown("### 📰 LIVE MEDICAL NEWS")
+            
+            live_news_items = fetch_live_medical_news()
+            news_json = json.dumps(live_news_items)
+            carousel_html = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+            <style>
+                * {{ box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }}
+                body {{ background: transparent; color: white; overflow: hidden; }}
+                .carousel-container {{
+                    position: relative;
+                    width: 100%;
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
+                    backdrop-filter: blur(16px);
+                    border: 1px solid rgba(255, 255, 255, 0.12);
+                    border-radius: 16px;
+                    padding: 14px;
+                    overflow: hidden;
+                }}
+                .slider {{
+                    display: flex;
+                    transition: transform 0.6s cubic-bezier(0.25, 1, 0.5, 1);
+                    width: 100%;
+                }}
+                .slide {{
+                    min-width: 100%;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                }}
+                .slide img {{
+                    width: 100%;
+                    height: 180px;
+                    object-fit: cover;
+                    border-radius: 10px;
+                }}
+                .tag {{
+                    background: #1f6feb;
+                    color: white;
+                    font-size: 0.7rem;
+                    font-weight: bold;
+                    padding: 2px 8px;
+                    border-radius: 4px;
+                    display: inline-block;
+                    width: fit-content;
+                }}
+                .title {{
+                    font-size: 1rem;
+                    font-weight: bold;
+                    color: #ffffff;
+                    line-height: 1.25;
+                }}
+                .summary {{
+                    font-size: 0.82rem;
+                    color: #c9d1d9;
+                    display: -webkit-box;
+                    -webkit-line-clamp: 2;
+                    -webkit-box-orient: vertical;
+                    overflow: hidden;
+                }}
+                .link {{
+                    color: #58a6ff;
+                    font-size: 0.8rem;
+                    text-decoration: none;
+                    font-weight: 500;
+                }}
+                .dots-container {{
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    gap: 8px;
+                    margin-top: 12px;
+                }}
+                .dot {{
+                    width: 8px;
+                    height: 8px;
+                    background-color: rgba(255, 255, 255, 0.3);
+                    border-radius: 50%;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                }}
+                .dot.active {{
+                    background-color: #58a6ff;
+                    width: 20px;
+                    border-radius: 4px;
+                }}
+            </style>
+            </head>
+            <body>
 
-        <script>
-            const news = {news_json};
-            const slider = document.getElementById('slider');
-            const dotsContainer = document.getElementById('dots');
-            let currentIndex = 0;
+            <div class="carousel-container">
+                <div class="slider" id="slider"></div>
+                <div class="dots-container" id="dots"></div>
+            </div>
 
-            news.forEach((item) => {{
-                const slide = document.createElement('div');
-                slide.className = 'slide';
-                slide.innerHTML = `
-                    <img src="${{item.img}}" alt="news">
-                    <div>
-                        <span class="tag">${{item.tag}}</span>
-                        <span style="color:#8b949e; font-size:0.75rem; margin-left:6px;">${{item.time}}</span>
-                    </div>
-                    <div class="title">${{item.title}}</div>
-                    <div class="summary">${{item.summary}}</div>
-                    <a class="link" href="${{item.link}}" target="_blank">Read official release ↗</a>
-                `;
-                slider.appendChild(slide);
-            }});
+            <script>
+                const news = {news_json};
+                const slider = document.getElementById('slider');
+                const dotsContainer = document.getElementById('dots');
+                let currentIndex = 0;
 
-            news.forEach((_, idx) => {{
-                const dot = document.createElement('div');
-                dot.className = `dot ${{idx === 0 ? 'active' : ''}}`;
-                dot.onclick = () => goToSlide(idx);
-                dotsContainer.appendChild(dot);
-            }});
-
-            function updateDots() {{
-                const dots = document.querySelectorAll('.dot');
-                dots.forEach((dot, idx) => {{
-                    dot.classList.toggle('active', idx === currentIndex);
+                news.forEach((item) => {{
+                    const slide = document.createElement('div');
+                    slide.className = 'slide';
+                    slide.innerHTML = `
+                        <img src="${{item.img}}" alt="news">
+                        <div>
+                            <span class="tag">${{item.tag}}</span>
+                            <span style="color:#8b949e; font-size:0.75rem; margin-left:6px;">${{item.time}}</span>
+                        </div>
+                        <div class="title">${{item.title}}</div>
+                        <div class="summary">${{item.summary}}</div>
+                        <a class="link" href="${{item.link}}" target="_blank">Read official release ↗</a>
+                    `;
+                    slider.appendChild(slide);
                 }});
-            }}
 
-            function goToSlide(index) {{
-                currentIndex = index;
-                slider.style.transform = `translateX(-${{currentIndex * 100}}%)`;
-                updateDots();
-            }}
+                news.forEach((_, idx) => {{
+                    const dot = document.createElement('div');
+                    dot.className = `dot ${{idx === 0 ? 'active' : ''}}`;
+                    dot.onclick = () => goToSlide(idx);
+                    dotsContainer.appendChild(dot);
+                }});
 
-            function nextSlide() {{
-                currentIndex = (currentIndex + 1) % news.length;
-                goToSlide(currentIndex);
-            }}
+                function updateDots() {{
+                    const dots = document.querySelectorAll('.dot');
+                    dots.forEach((dot, idx) => {{
+                        dot.classList.toggle('active', idx === currentIndex);
+                    }});
+                }}
 
-            setInterval(nextSlide, 5000);
-        </script>
-        </body>
-        </html>
-        """
-        st.components.v1.html(carousel_html, height=360)
+                function goToSlide(index) {{
+                    currentIndex = index;
+                    slider.style.transform = `translateX(-${{currentIndex * 100}}%)`;
+                    updateDots();
+                }}
 
-    with col_right:
-        st.markdown('<div class="gloss-panel">', unsafe_allow_html=True)
-        st.markdown("### ⚙️ SETTINGS")
-        st.radio("Query Engine Filter:", ["Generic Active Ingredient", "Exact Match Only"], key="home_filter")
-        st.caption("Select a drug active ingredient from the top search bar to load focused drug monographs.")
+                function nextSlide() {{
+                    currentIndex = (currentIndex + 1) % news.length;
+                    goToSlide(currentIndex);
+                }}
+
+                setInterval(nextSlide, 5000);
+            </script>
+            </body>
+            </html>
+            """
+            st.components.v1.html(carousel_html, height=360)
+
+    with tab_diseases:
+        st.markdown("### 🩺 CLINICAL DISEASE PROTOCOLS & MANAGEMENT")
+        disease_choice = st.selectbox("Select Clinical Condition / Disease Entity:", list(DISEASE_MANAGEMENT_DB.keys()))
         
-        # --- GITHUB DEPLOYMENT / REQUIREMENTS GENERATOR ---
-        st.markdown("---")
-        st.markdown("#### 📦 Deployment Dependencies")
-        requirements_data = "streamlit\nrequests\n"
-        st.download_button(
-            label="💾 Download requirements.txt",
-            data=requirements_data,
-            file_name="requirements.txt",
-            mime="text/plain",
-            use_container_width=True,
-            help="Download this file and place it next to medicine.py when deploying to GitHub or Streamlit Cloud."
-        )
-        st.markdown('</div>', unsafe_allow_html=True)
+        disease_data = DISEASE_MANAGEMENT_DB[disease_choice]
+        
+        d_col1, d_col2 = st.columns([1, 2], gap="large")
+        
+        with d_col1:
+            st.markdown('<div class="gloss-panel">', unsafe_allow_html=True)
+            st.markdown(f'<div class="badge-disease">{disease_data["category"]}</div>', unsafe_allow_html=True)
+            st.metric("Clinical Status", "Standard Protocol")
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+        with d_col2:
+            st.markdown('<div class="gloss-panel">', unsafe_allow_html=True)
+            st.markdown("#### 💊 First-Line Therapeutic Regimen")
+            st.write(f"• {disease_data['first_line']}")
+            
+            st.markdown("#### ⚙️ Mechanism of Action / Pharmacodynamics")
+            st.write(f"• {disease_data['mechanism']}")
+            
+            st.markdown("#### 🌿 Non-Pharmacological Management & Support")
+            st.write(f"• {disease_data['non_pharm']}")
+            
+            st.markdown("#### 📊 Clinical Monitoring & Follow-Up")
+            st.write(f"• {disease_data['monitoring']}")
+            st.markdown('</div>', unsafe_allow_html=True)
 
     # --- BOTTOM LINE DIVIDER ---
     st.markdown('<hr class="bottom-line">', unsafe_allow_html=True)
